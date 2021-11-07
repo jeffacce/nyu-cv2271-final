@@ -11,13 +11,14 @@ from skimage import measure, morphology
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
-def load_scan(path):
+def load_scan(path, clip_min=-1000, clip_max=3000):
     img = sitk.ReadImage(path)
     arr = sitk.GetArrayFromImage(img)
-    # air is -1000. < -1000 is out of scanner bounds (essentially NaN); clip to -1000
-    # > 3000 is foreign body: metal implants, pacemakers, etc.
-    arr = arr.clip(min=-1000, max=3000)
-    arr = np.moveaxis(arr, 0, -1)
+    if not ((clip_min is None) and (clip_max is None)):
+        # air is -1000. < -1000 is out of scanner bounds (essentially NaN); clip to -1000
+        # > 3000 is foreign body: metal implants, pacemakers, etc.
+        arr = arr.clip(min=clip_min, max=clip_max)
+    arr = arr.transpose(2, 1, 0)
     return img, arr
 
 

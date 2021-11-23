@@ -25,8 +25,9 @@ for seriesuid, subset_idx in tqdm(uid_to_subset.items()):
     img, arr = load_scan(loadpath.as_posix())
     originX, originY, originZ = img.GetOrigin()
     arr_iso, spacing_iso = resample(arr, img.GetSpacing())
+    directionX, directionY, directionZ = img.GetDirection()
     spacingX, spacingY, spacingZ = spacing_iso
-    row = [seriesuid, spacingX, spacingY, spacingZ, originX, originY, originZ]
+    row = [seriesuid, spacingX, spacingY, spacingZ, originX, originY, originZ, directionX, directionY, directionZ]
     df.append(row)
     
     if not (ROOT_ISO / subset_idx).exists():
@@ -36,5 +37,5 @@ for seriesuid, subset_idx in tqdm(uid_to_subset.items()):
     np.save(savepath, arr_iso)
 
 df = pd.DataFrame(df)
-df.columns = ['seriesuid', 'spacingX', 'spacingY', 'spacingZ', 'originX', 'originY', 'originZ']
-df.to_csv(ROOT_ISO / 'seriesuid_isometric_spacing_origin.csv', index=False)
+df.columns = ['seriesuid', 'spacingX', 'spacingY', 'spacingZ', 'originX', 'originY', 'originZ', 'directionX', 'directionY', 'directionZ']
+df.to_csv(ROOT_ISO / 'seriesuid_isometric_spacing_origin_direction.csv', index=False)

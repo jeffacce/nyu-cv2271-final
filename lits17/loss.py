@@ -264,13 +264,16 @@ Tversky loss
 """
 class TverskyLoss(nn.Module):
 
-    def __init__(self):
+    def __init__(self, alpha=0.3, beta=0.7):
         super().__init__()
+        self.alpha = alpha
+        self.beta = beta
 
     def forward(self, pred, target):
         pred = pred.squeeze(dim=1)
         smooth = 1
         # Definition of dice coefficient
-        dice = (pred * target).sum(dim=1).sum(dim=1).sum(dim=1) / ((pred * target).sum(dim=1).sum(dim=1).sum(dim=1) + 0.3 * (pred * (1 - target)).sum(dim=1).sum(dim=1).sum(dim=1) + 0.7 * ((1 - pred) * target).sum(dim=1).sum(dim=1).sum(dim=1) + smooth)
+        dice = (pred * target).sum(dim=1).sum(dim=1).sum(dim=1) / ((pred * target).sum(dim=1).sum(dim=1).sum(dim=1) + self.alpha * (pred * (1 - target)).sum(dim=1).sum(dim=1).sum(dim=1) + self.beta * ((1 - pred) * target).sum(dim=1).sum(dim=1).sum(dim=1) + smooth)
         # Returns the dice distance
         return torch.clamp((1 - dice).mean(), 0, 2)
+

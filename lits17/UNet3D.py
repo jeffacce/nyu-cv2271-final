@@ -2,19 +2,15 @@ import torch.nn as nn
 import torch
 from torchsummary import summary
 import torchsummaryX
-# from lib.medzoo.BaseModelClass import BaseModel
-from BaseModelClass import BaseModel
 
 
-class UNet3D(BaseModel):
+class UNet3D(nn.Module):
     """
     Implementations based on the Unet3D paper: https://arxiv.org/abs/1606.06650
     """
 
     def __init__(self, in_channels, n_classes, base_n_filter=8):
         super(UNet3D, self).__init__()
-        
-        self.single_channel = True
         
         self.in_channels = in_channels
         self.n_classes = n_classes
@@ -25,7 +21,7 @@ class UNet3D(BaseModel):
         self.upsacle = nn.Upsample(scale_factor=2, mode='nearest')
         self.softmax = nn.Softmax(dim=1)
         
-        self.conv3d_c0_0 = nn.Conv3d(1, 4, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv3d_c0_0 = nn.Conv3d(1, 4, kernel_size=3, stride=1, padding=1, bias=True)
         
         self.conv3d_c1_1 = nn.Conv3d(self.in_channels, self.base_n_filter, kernel_size=3, stride=1, padding=1,
                                      bias=False)
@@ -116,7 +112,8 @@ class UNet3D(BaseModel):
             nn.LeakyReLU())
 
     def forward(self, x):
-        if self.single_channel:
+        # if x is single channel (CT in our case), map to 4 channels
+        if x.shape[1] == 1:
             x = self.conv3d_c0_0(x)
         #  Level 1 context pathway
         out = self.conv3d_c1_1(x)

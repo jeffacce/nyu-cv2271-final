@@ -90,56 +90,57 @@ def slice_with_padding(slices, arr, pad_val=-1000):
     return cube
 
 
-ROOT_ISO = Path('/scratch/zc2357/cv/final/datasets/luna16_iso')
-ROOT_CUBES = Path('/scratch/zc2357/cv/final/datasets/luna16_cubes')
-if not ROOT_CUBES.exists():
-    ROOT_CUBES.mkdir()
+if __name__ == '__main__':
+    ROOT_ISO = Path('/scratch/zc2357/cv/final/datasets/luna16_iso')
+    ROOT_CUBES = Path('/scratch/zc2357/cv/final/datasets/luna16_cubes')
+    if not ROOT_CUBES.exists():
+        ROOT_CUBES.mkdir()
 
-with open(ROOT_ISO / 'uid_to_subset.json') as f:
-    uid_to_subset = json.load(f)
-
-
-candidates = pd.read_csv(ROOT_ISO / 'candidates_V2.csv').set_index('seriesuid')
-metadata = pd.read_csv(ROOT_ISO / 'seriesuid_isometric_spacing_origin_direction.csv').set_index('seriesuid')
-pos_cubes = []
-pos_cubes_metadata = []
+    with open(ROOT_ISO / 'uid_to_subset.json') as f:
+        uid_to_subset = json.load(f)
 
 
-for seriesuid, subset_idx in tqdm(uid_to_subset.items()):
-    path = ROOT_ISO / subset_idx / ('%s.npy' % seriesuid)
-    print(path)
-    
-    candidates_case = candidates.loc[seriesuid]
-    spacing = metadata.loc[seriesuid].to_numpy()[:3]
-    origin = metadata.loc[seriesuid].to_numpy()[3:6]
-    direction = metadata.loc[seriesuid].to_numpy()[6:]
-    arr = np.load(path.as_posix())
-    
-    neg_cubes = []
-    for i in range(len(candidates_case)):
-        row = candidates_case.iloc[i]
-        coord = row[['coordX', 'coordY', 'coordZ']].astype(float).to_numpy()
-        label = row['class'].astype(int)
-        idx = coord_to_idx(coord, spacing, origin, direction)
-        slices = get_slices(idx)
-        cube = slice_with_padding(slices, arr, pad_val=-1000)
-        if label == 1:
-            pos_cubes.append(cube)
-            pos_cubes_metadata.append([seriesuid, *idx])
-        else:
-            neg_cubes.append(cube)
-    
-    if not (ROOT_CUBES / subset_idx).exists():
-        (ROOT_CUBES / subset_idx).mkdir()
-    
-    neg_cubes = np.stack(neg_cubes).reshape(-1, 1, 48, 48, 48)
-    neg_savepath = ROOT_CUBES / subset_idx / ('neg_%s.npy' % seriesuid)
-    np.save(neg_savepath, neg_cubes)
+    candidates = pd.read_csv(ROOT_ISO / 'candidates_V2.csv').set_index('seriesuid')
+    metadata = pd.read_csv(ROOT_ISO / 'seriesuid_isometric_spacing_origin_direction.csv').set_index('seriesuid')
+    pos_cubes = []
+    pos_cubes_metadata = []
 
-pos_cubes = np.stack(pos_cubes).reshape(-1, 1, 48, 48, 48)
-pos_savepath = ROOT_CUBES / 'pos.npy'
-np.save(pos_savepath, pos_cubes)
 
-pos_cubes_metadata = pd.DataFrame(pos_cubes_metadata)
-pos_cubes_metadata.columns = ['seriesuid', 'idxX', 'idxY', 'idxZ']
-pos_cubes_metadata.to_csv(ROOT_CUBES / 'pos_cubes_metadata.csv', index=False)
+    for seriesuid, subset_idx in tqdm(uid_to_subset.items()):
+        path = ROOT_ISO / subset_idx / ('%s.npy' % seriesuid)
+        print(path)
+
+        candidates_case = candidates.loc[seriesuid]
+        spacing = metadata.loc[seriesuid].to_numpy()[:3]
+        origin = metadata.loc[seriesuid].to_numpy()[3:6]
+        direction = metadata.loc[seriesuid].to_numpy()[6:]
+        arr = np.load(path.as_posix())
+
+        neg_cubes = []
+        for i in range(len(candidates_case)):
+            row = candidates_case.iloc[i]
+            coord = row[['coordX', 'coordY', 'coordZ']].astype(float).to_numpy()
+            label = row['class'].astype(int)
+            idx = coord_to_idx(coord, spacing, origin, direction)
+            slices = get_slices(idx)
+            cube = slice_with_padding(slices, arr, pad_val=-1000)
+            if label == 1:
+                pos_cubes.append(cube)
+                pos_cubes_metadata.append([seriesuid, *idx])
+            else:
+                neg_cubes.append(cube)
+
+        if not (ROOT_CUBES / subset_idx).exists():
+            (ROOT_CUBES / subset_idx).mkdir()
+
+        neg_cubes = np.stack(neg_cubes).reshape(-1, 1, 48, 48, 48)
+        neg_savepath = ROOT_CUBES / subset_idx / ('neg_%s.npy' % seriesuid)
+        np.save(neg_savepath, neg_cubes)
+
+    pos_cubes = np.stack(pos_cubes).reshape(-1, 1, 48, 48, 48)
+    pos_savepath = ROOT_CUBES / 'pos.npy'
+    np.save(pos_savepath, pos_cubes)
+
+    pos_cubes_metadata = pd.DataFrame(pos_cubes_metadata)
+    pos_cubes_metadata.columns = ['seriesuid', 'idxX', 'idxY', 'idxZ']
+    pos_cubes_metadata.to_csv(ROOT_CUBES / 'pos_cubes_metadata.csv', index=False)

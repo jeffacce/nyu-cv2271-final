@@ -128,7 +128,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Experiment logs and models
+# Experiment logs, models, and raw inference results
 luna16/runs
 luna16/runs_backup
-
+luna16/inference
+baseline/runs
+*.pth
+events.out.tfevents*
+baseline/inference
+baseline/inference_alea_yhat

@@ -207,3 +207,26 @@ class TinyClassifier(nn.Module):
         output = self.fc2(output)
         return output
 
+
+class TransferClassifierHead(nn.Module):
+    def __init__(self, img_size=48, base_n_filter=8, drop_p=0):
+        super(TransferClassifierHead, self).__init__()
+        self.base_n_filter = base_n_filter
+
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(
+            self.base_n_filter * 16 * (img_size // 16)**3,
+            self.base_n_filter * 16
+        )
+        self.lrelu = nn.LeakyReLU()
+        self.dropout1d = nn.Dropout(p=drop_p)
+        self.fc2 = nn.Linear(self.base_n_filter * 16, 1)
+
+    def forward(self, x):
+        out = self.flatten(x)
+        out = self.fc1(out)
+        out = self.lrelu(out)
+        out = self.dropout1d(out)
+        out = self.fc2(out)
+        return out
+

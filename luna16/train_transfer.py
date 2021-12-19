@@ -4,7 +4,8 @@ import torch.optim as optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from datasets import LUNA16DatasetFromIso, LUNA16DatasetFromCubes
-from models import Classifier3D, TinyClassifier
+from models import TransferClassifierHead
+from UNet3D import Encoder
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 from pathlib import Path
@@ -46,29 +47,32 @@ LR = 1e-4
 WEIGHT_DECAY = 1e-2
 LOG_INTERVAL = 100
 SHOULD_AUGMENT = True
-RESUME = True
+RESUME = False
 CHECKPOINT = {
-    'logdir': 'runs/Dec10_23-51-34_gr056.nyu.cluster_baseline_UNet3D3x3_randomFlipsPosNeg_focalLossAlpha0.5_weightDecay1e-2_lr1e-4_AdamW',
-    'optimizer_state': 'epoch_5_2431_optimizer.pth',
-    'model_state': 'epoch_5_2431.pth',
-    'resume_epoch': 6,
-    'resume_pos_epoch': 2432,
+    'logdir': '',
+    'optimizer_state': '',
+    'model_state': '',
+    'resume_epoch': 0,
+    'resume_pos_epoch': 0,
 }
-RUN_COMMENT = '_baseline_UNet3D3x3_randomFlipsPosNeg_focalLossAlpha0.5_weightDecay1e-2_lr1e-4_AdamW'
+RUN_COMMENT = '_transfer_randomFlipsPosNeg_focalLossAlpha0.5_weightDecay1e-2_lr1e-4_AdamW'
+ENCODER_WEIGHTS = '/scratch/zc2357/cv/final/nyu-cv2271-final/baseline/runs/Dec11_19-20-25_gr011.nyu.cluster_lits17_brats20_kits21_cotraining_baseline_lr1.0e-04_weightDecay1.0e-02/kits21_epoch_25_step_6241_encoder.pth'
 ###################### /CONFIG ########################
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-model = Classifier3D(in_channels=1, img_size=48).to(device)
-optimizer = optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+encoder = Encoder(1, base_n_filter=8, drop_p=0.6).to(device)
+encoder.load_state_dict(torch.load(ENCODER_WEIGHTS, map_location=device))
+classifier = TransferClassifierHead(img_size=48, base_n_filter=8, drop_p=0).to(device)
+
+optimizer = optim.AdamW(
+    list(encoder.parameters()) + list(classifier.parameters()),
+    lr=LR,
+    weight_decay=WEIGHT_DECAY,
+)
 if RESUME:
-    logdir = Path(CHECKPOINT['logdir'])
-    model.load_state_dict(torch.load(logdir / CHECKPOINT['model_state']))
-    optimizer.load_state_dict(torch.load(logdir / CHECKPOINT['optimizer_state']))
-    start_epoch = CHECKPOINT['resume_epoch']
-    start_pos_epoch = CHECKPOINT['resume_pos_epoch']
-    writer = SummaryWriter(log_dir=CHECKPOINT['logdir'], purge_step=CHECKPOINT['resume_pos_epoch'])  # should be global step, but val epoch always < pos epoch, doesn't matter
+    raise NotImplementedError("# TODO: fix my hot garbage")
 else:
     start_epoch = 1
     start_pos_epoch = 1
@@ -147,7 +151,8 @@ for epoch in range(start_epoch, EPOCHS+1):
         num_workers=1,
     )
 
-    model.train()
+    encoder.train()
+    classifier.train()
     print('Epoch %s' % epoch)
     train_pos_dataiter = iter(train_pos_dataloader)
     train_loss_mean = 0
@@ -191,7 +196,8 @@ for epoch in range(start_epoch, EPOCHS+1):
         train_X = train_X.to(device)
         train_y = train_y.to(device)
         
-        pred_y = model(train_X)
+        out, _, _, _, _ = encoder(train_X)
+        pred_y = classifier(out)
 
         loss = binary_focal_loss_with_logits(pred_y, train_y, alpha=0.5, gamma=2.0, reduction='mean')
         loss.backward()
@@ -231,7 +237,8 @@ for epoch in range(start_epoch, EPOCHS+1):
     
     # VALIDATION
     print('Validation')
-    model.eval()
+    encoder.eval()
+    classifier.eval()
     tp = 0
     tn = 0
     fp = 0
@@ -240,10 +247,13 @@ for epoch in range(start_epoch, EPOCHS+1):
     for batch_idx, (X, y) in enumerate(val_dataloader):
         X = X.reshape(-1, 1, 48, 48, 48).float()
         y = y.reshape(-1, 1).float()
-        X = linear_transform_to_0_1(X, min=-1000, max=400)
+        
+        # TODO: add linear transform here!
+        
         X = X.to(device)
         y = y.to(device)
-        pred_y = model(X)
+        out, _, _, _, _ = encoder(X)
+        pred_y = classifier(out)
         
         pred_y_bool = torch.sigmoid(pred_y) > 0.5
         y_bool = (y == 1)
@@ -268,8 +278,9 @@ for epoch in range(start_epoch, EPOCHS+1):
     except ZeroDivisionError:
         writer.add_scalar('recall/val', -1, epoch)
     
-    model_savepath = (Path(writer.get_logdir()) / f'epoch_{epoch}_{pos_epoch}.pth').as_posix()
+    encoder_savepath = (Path(writer.get_logdir()) / f'epoch_{epoch}_{pos_epoch}_encoder.pth').as_posix()
+    classifier_savepath = (Path(writer.get_logdir()) / f'epoch_{epoch}_{pos_epoch}_classifier.pth').as_posix()
     optimizer_savepath = (Path(writer.get_logdir()) / f'epoch_{epoch}_{pos_epoch}_optimizer.pth').as_posix()
-    torch.save(model.state_dict(), model_savepath)
+    torch.save(encoder.state_dict(), encoder_savepath)
+    torch.save(classifier.state_dict(), classifier_savepath)
     torch.save(optimizer.state_dict(), optimizer_savepath)
-
